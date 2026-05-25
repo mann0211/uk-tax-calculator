@@ -1,351 +1,182 @@
-<!DOCTYPE html>
-<html lang="zh-HK">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>🇬🇧 英國稅務工時記賬 (2026/27)</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <style>
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; -webkit-tap-highlight-color: transparent; }
-        .container { background-color: #F8FAFC; min-height: 100vh; padding-bottom: 30px; }
-        .dashboard { background-color: #FFF; padding: 16px; border-bottom: 1px solid #E2E8F0; }
-        .dashboard-title { font-size: 16px; font-weight: 700; color: #1E293B; margin: 0 0 8px 0; }
-        .rate-setting-row { display: flex; align-items: center; margin: 8px 0; background-color: #EFF6FF; padding: 8px; border-radius: 8px; }
-        .rate-label { font-size: 13px; color: #1E40AF; font-weight: 600; }
-        .rate-input { background-color: #FFF; border: 1px solid #BFDBFE; border-radius: 6px; padding: 4px 8px; width: 70px; font-size: 14px; font-weight: 700; color: #1E3A8A; text-align: center; margin-left: 5px; }
-        .progress-bar-outer { height: 8px; background-color: #E2E8F0; border-radius: 4px; overflow: hidden; margin-top: 8px; }
-        .progress-bar-inner { height: 100%; background-color: #3B82F6; transition: width 0.3s; }
-        .progress-subtext { font-size: 11px; color: #64748B; margin-top: 6px; }
-        .month-selector { background-color: #FFF; padding: 8px 16px; border-bottom: 1px solid #E2E8F0; display: flex; overflow-x: auto; white-space: nowrap; gap: 8px; }
-        .month-tab { padding: 6px 12px; border-radius: 20px; background-color: #F1F5F9; border: none; color: #64748B; font-weight: 600; font-size: 12px; cursor: pointer; }
-        .month-tab-active { background-color: #3B82F6; color: #FFF; }
-        .list-container { padding: 16px; }
-        .card { background-color: #FFF; border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 5px solid #3B82F6; box-shadow: 0 1px 3px rgba(0,0,0,0.05); cursor: pointer; }
-        .card-empty { border-left-color: #CBD5E1; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; }
-        .week-title { font-size: 15px; font-weight: 700; color: #1E293B; }
-        .date-text { font-size: 12px; color: #64748B; margin-top: 2px; }
-        .status-verified { color: #3B82F6; font-weight: 700; font-size: 12px; }
-        .status-pending { color: #94A3B8; font-size: 12px; }
-        .card-body { margin-top: 12px; border-top: 1px solid #F1F5F9; padding-top: 8px; }
-        .data-row { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; }
-        .label { font-size: 12px; color: #64748B; }
-        .value { font-size: 13px; font-weight: 700; color: #1E293B; }
-        .sub-label { font-size: 13px; color: #475569; }
-        .calc-value { font-size: 13px; font-weight: 700; color: #334155; }
-        .percent-text { font-size: 11px; color: #64748B; font-weight: 400; }
-        .alert-badge { background-color: #FEE2E2; color: #EF4444; padding: 2px 6px; border-radius: 4px; margin-left: 6px; font-size: 10px; font-weight: 700; }
-        .safe-badge { background-color: #D1FAE5; color: #10B981; padding: 2px 6px; border-radius: 4px; margin-left: 6px; font-size: 10px; font-weight: 700; }
-        .divider { height: 1px; background-color: #F1F5F9; margin: 6px 0; }
-        .net-label { font-size: 13px; font-weight: 700; color: #0F172A; }
-        .net-value { font-size: 15px; font-weight: 800; color: #10B981; }
+import streamlit as st
+import pandas as pd
+import os
+from datetime import datetime
+
+# 設定網頁
+st.set_page_config(page_title="英國工資歷史紀錄 App", layout="centered")
+st.title("🇬🇧 英國每週工資歷史紀錄與估算")
+
+DB_FILE = "salary_history.csv"
+
+# --- 1. 定義 2020-2026 歷史稅務大數據 (以每週 Weekly 計算) ---
+# 註：英國稅年度由 4 月 6 日開始。NI 稅率在 2022 與 2024 年中有過特別調整，此處取最核心或年度主要稅率。
+def get_uk_tax_rules(date_obj):
+    year = date_obj.year
+    month = date_obj.month
+    day = date_obj.day
+    
+    # 將日期轉換成「稅務年度」
+    # 如果是 4 月 6 日前，屬於前一個稅年度
+    if (month < 4) or (month == 4 and day < 6):
+        tax_year = year - 1
+    else:
+        tax_year = year
+
+    # 預設參數 (若超出範圍則用 2026 最新)
+    rules = {
+        "year_label": f"{tax_year}/{str(tax_year+1)[2:]}",
+        "ni_threshold": 242.0,
+        "ni_rate": 0.08,
+        "pension_threshold": 120.0
+    }
+    
+    if tax_year <= 2020:
+        rules.update({"year_label": "2020/21", "ni_threshold": 183.0, "ni_rate": 0.12, "pension_threshold": 120.0})
+    elif tax_year == 2021:
+        rules.update({"year_label": "2021/22", "ni_threshold": 184.0, "ni_rate": 0.12, "pension_threshold": 120.0})
+    elif tax_year == 2022:
+        # 2022年 7月起 NI 門檻大幅調高至與所得稅同步
+        if (month > 7) or (month == 7 and day >= 6):
+            rules.update({"year_label": "2022/23 (Late)", "ni_threshold": 242.0, "ni_rate": 0.12, "pension_threshold": 120.0})
+        else:
+            rules.update({"year_label": "2022/23 (Early)", "ni_threshold": 190.0, "ni_rate": 0.1325, "pension_threshold": 120.0}) # 曾短暫有 1.25% 醫療附加稅
+    elif tax_year == 2023:
+        # 2024年1月起 NI 員工稅率由 12% 減至 10%
+        if (month == 1 and day >= 6) or month > 1:
+            rules.update({"year_label": "2023/24 (Late)", "ni_threshold": 242.0, "ni_rate": 0.10, "pension_threshold": 120.0})
+        else:
+            rules.update({"year_label": "2023/24 (Early)", "ni_threshold": 242.0, "ni_rate": 0.12, "pension_threshold": 120.0})
+    elif tax_year == 2024:
+        # 2024年4月起 再減至 8%
+        rules.update({"year_label": "2024/25", "ni_threshold": 242.0, "ni_rate": 0.08, "pension_threshold": 120.0})
+    elif tax_year == 2025:
+        rules.update({"year_label": "2025/26", "ni_threshold": 242.0, "ni_rate": 0.08, "pension_threshold": 120.0})
+    # 2026 年或以後
+    else:
+        rules.update({"year_label": f"{tax_year}/{str(tax_year+1)[2:]}", "ni_threshold": 242.0, "ni_rate": 0.08, "pension_threshold": 120.0})
         
-        /* 彈窗與模式切換按鈕專用樣式 */
-        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; z-index: 999; }
-        .modal-content { background-color: #FFF; border-radius: 16px; padding: 20px; width: 85%; max-width: 340px; }
-        .modal-title { font-size: 16px; font-weight: 700; margin: 0 0 10px 0; color: #1E293B; }
-        .input-label { font-size: 12px; color: #475569; margin-bottom: 8px; margin-top: 10px; }
-        .pension-group { display: flex; gap: 8px; margin-bottom: 15px; }
-        .pension-btn { flex: 1; padding: 10px 6px; font-size: 12px; font-weight: 600; border: 1px solid #E2E8F0; background-color: #FFF; border-radius: 8px; cursor: pointer; color: #475569; text-align: center; }
-        .pension-btn-active { background-color: #3B82F6; color: #FFF; border-color: #3B82F6; }
-        .input { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px; font-size: 16px; color: #1E293B; width: 92%; margin-bottom: 15px; box-sizing: border-box; }
-        .modal-button-group { display: flex; justify-content: space-between; gap: 10px; }
-        .btn { flex: 1; padding: 12px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; }
-        .btn-cancel { background-color: #F1F5F9; color: #64748B; }
-        .btn-save { background-color: #3B82F6; color: #FFF; }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
+    return rules
 
-    <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+# --- 2. 讀取 / 初始化 CSV 本地資料庫 ---
+columns_list = ["Date", "Year", "Month", "Gross Pay (£)", "PAYE Tax (£)", "NI (£)", "Pension EE (£)", "Pension ER (£)", "Net Pay (£)"]
 
-        function getWeekDateRange(weekNum) {
-            const taxStart = new Date('2026-04-06');
-            const startDays = (weekNum - 1) * 7;
-            const weekStart = new Date(taxStart.getTime() + startDays * 24 * 60 * 60 * 1000);
-            const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
-            const format = (d) => `${d.getDate()}/${d.getMonth() + 1}`;
-            return `${format(weekStart)} - ${format(weekEnd)}`;
+if os.path.exists(DB_FILE):
+    try:
+        df_all = pd.read_csv(DB_FILE)
+        # 確保格式正確
+        for col in columns_list:
+            if col not in df_all.columns:
+                df_all[col] = 0.0 if col != "Date" and col != "Year" and col != "Month" else ""
+    except:
+        df_all = pd.DataFrame(columns=columns_list)
+else:
+    df_all = pd.DataFrame(columns=columns_list)
+
+# --- 3. 新增紀錄表單 ---
+st.header("➕ 新增薪資紀錄")
+
+with st.form("salary_form", clear_on_submit=False):
+    col1, col2 = st.columns(2)
+    with col1:
+        date_input = st.date_input("出糧日期 (Date)", value=datetime.today())
+        gross_pay = st.number_input("稅前人工 (Gross Pay £)", min_value=0.0, step=10.0, value=500.0)
+    with col2:
+        paye_tax = st.number_input("預扣入息稅 (PAYE Tax £)", min_value=0.0, step=5.0, value=0.0)
+    
+    # 根據輸入日期獲取歷史稅率
+    current_rules = get_uk_tax_rules(date_input)
+    
+    # 計算歷史自動值
+    calc_ni = max(0.0, (gross_pay - current_rules["ni_threshold"]) * current_rules["ni_rate"]) if gross_pay > current_rules["ni_threshold"] else 0.0
+    calc_pension_ee = max(0.0, (gross_pay - current_rules["pension_threshold"]) * 0.05) if gross_pay > current_rules["pension_threshold"] else 0.0
+    calc_pension_er = max(0.0, (gross_pay - current_rules["pension_threshold"]) * 0.03) if gross_pay > current_rules["pension_threshold"] else 0.0
+    
+    st.info(f"📜 偵測至屬英國 **{current_rules['year_label']}** 稅期規則：\n"
+            f"免稅額 NI 起點 £{current_rules['ni_threshold']} (稅率 {current_rules['ni_rate']*100}%) | Pension 起點 £{current_rules['pension_threshold']}\n"
+            f"💡 系統自動估算：NI ~£{calc_ni:.2f} | 員工 Pension ~£{calc_pension_ee:.2f}")
+    
+    # 用戶確認欄
+    final_ni = st.number_input("確認實際扣除 NI (£)", min_value=0.0, value=round(calc_ni, 2))
+    final_pension_ee = st.number_input("確認實際員工 Pension (£)", min_value=0.0, value=round(calc_pension_ee, 2))
+    final_pension_er = st.number_input("確認實際僱主 Pension (£)", min_value=0.0, value=round(calc_pension_er, 2))
+    
+    final_net_pay = gross_pay - paye_tax - final_ni - final_pension_ee
+    
+    submit_btn = st.form_submit_button("💾 儲存並寫入檔案")
+    
+    if submit_btn:
+        new_row = {
+            "Date": date_input.strftime("%Y-%m-%d"),
+            "Year": str(date_input.year),
+            "Month": f"{date_input.month:02d}", # 格式化成 01, 02 方便排列
+            "Gross Pay (£)": round(gross_pay, 2),
+            "PAYE Tax (£)": round(paye_tax, 2),
+            "NI (£)": round(final_ni, 2),
+            "Pension EE (£)": round(final_pension_ee, 2),
+            "Pension ER (£)": round(final_pension_er, 2),
+            "Net Pay (£)": round(final_net_pay, 2)
         }
+        
+        # 附加至 DataFrame 並儲存
+        df_all = pd.concat([df_all, pd.DataFrame([new_row])], ignore_index=True)
+        df_all.to_csv(DB_FILE, index=False)
+        st.success(f"🎉 成功寫入 {DB_FILE}！")
+        st.rerun() # 重新整理畫面顯示最新數據
 
-        function getMonthNameForWeek(weekNum) {
-            const taxStart = new Date('2026-04-06');
-            const startDays = (weekNum - 1) * 7;
-            const weekStart = new Date(taxStart.getTime() + startDays * 24 * 60 * 60 * 1000);
-            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-            return months[weekStart.getMonth()];
-        }
+st.markdown("---")
 
-        function App() {
-            const [globalRate, setGlobalRate] = useState('12.71');
-            const [currentMonth, setCurrentMonth] = useState("May");
-            const [modalVisible, setModalVisible] = useState(false);
-            const [selectedWeek, setSelectedWeek] = useState(null);
-            const [inputHours, setInputHours] = useState('');
-            const [pensionMethod, setPensionMethod] = useState('standard'); // standard 或 sac
+# --- 4. 長期數據歷史篩選區 ---
+st.header("🔍 歷史數據篩選與統計")
 
-            const [records, setRecords] = useState(() => {
-                return Array.from({ length: 53 }, (_, i) => ({
-                    weekNum: i + 1,
-                    dateRange: getWeekDateRange(i + 1),
-                    monthName: getMonthNameForWeek(i + 1),
-                    hoursWorked: null,
-                    grossPay: null,
-                    calculatedTax: 0,
-                    calculatedNI: 0,
-                    calculatedPension: 0,
-                    netPay: 0,
-                    niPercent: 0,
-                    pensionPercent: 0,
-                    isNiAlert: false,
-                    isPensionAlert: false,
-                    isTaxAlert: false,
-                    pensionMethodSaved: 'standard' // 每週單獨儲存機制
-                }));
-            });
-
-            useEffect(() => {
-                const savedRate = localStorage.getItem('@global_rate');
-                const savedRecords = localStorage.getItem('@weekly_records');
-                let currentRate = savedRate || '12.71';
-                if (savedRate) setGlobalRate(savedRate);
-                if (savedRecords) {
-                    try {
-                        const parsed = JSON.parse(savedRecords);
-                        setRecords(recalculateAllWeeks(parsed, currentRate));
-                    } catch (e) { console.error(e); }
-                }
-            }, []);
-
-            // 核心計稅與推算邏輯 (完全移植 Expo 雙制度演算法)
-            const recalculateAllWeeks = (currentRecords, currentRate) => {
-                const updated = [...currentRecords];
-                const weeklyAllowance = 12570 / 52;
-                const weeklyBasicLimit = 37700 / 52;
-                const rate = parseFloat(currentRate) || 0;
-
-                let cumulativeGrossForTax = 0;
-                let previousTotalExpectedTax = 0;
-
-                for (let i = 0; i < 53; i++) {
-                    const r = updated[i];
-                    if (r.hoursWorked === null) {
-                        r.grossPay = null; r.calculatedTax = 0; r.calculatedNI = 0; r.calculatedPension = 0; r.netPay = 0;
-                        r.niPercent = 0; r.pensionPercent = 0; r.isNiAlert = false; r.isPensionAlert = false; r.isTaxAlert = false;
-                        continue;
-                    }
-
-                    r.grossPay = r.hoursWorked * rate;
-                    const method = r.pensionMethodSaved || 'standard';
-
-                    // 1. Pension 退休金計算 (過基本門檻 £120 扣 5%)
-                    const pensionLowerThreshold = 120;
-                    if (r.grossPay > pensionLowerThreshold) {
-                        r.calculatedPension = (r.grossPay - pensionLowerThreshold) * 0.05;
-                        r.isPensionAlert = true;
-                    } else {
-                        r.calculatedPension = 0;
-                        r.isPensionAlert = false;
-                    }
-                    r.pensionPercent = r.grossPay > 0 ? (r.calculatedPension / r.grossPay) * 100 : 0;
-
-                    // 2. National Insurance (NI) 國民保險計算
-                    // ⚠️ 如果係 Salary Sacrifice (薪酬犧牲)，Pension 供款會先扣減 NI 基數，達致慳 NI 效果！
-                    let baseForNI = r.grossPay;
-                    if (method === 'sac') {
-                        baseForNI = Math.max(0, r.grossPay - r.calculatedPension);
-                    }
-                    
-                    let expectedNI = 0;
-                    if (baseForNI > 242) {
-                        r.isNiAlert = true;
-                        if (baseForNI <= 967) {
-                            expectedNI = (baseForNI - 242) * 0.08;
-                        } else {
-                            expectedNI = ((967 - 242) * 0.08) + ((baseForNI - 967) * 0.02);
-                        }
-                    } else {
-                        r.isNiAlert = false;
-                    }
-                    r.calculatedNI = expectedNI;
-                    r.niPercent = r.grossPay > 0 ? (r.calculatedNI / r.grossPay) * 100 : 0;
-
-                    // 3. Income Tax 所得稅累計制計算
-                    // 標準制度 (Net Pay) 與 薪酬犧牲 (Salary Sac.) 都會將 Pension 喺計稅前扣除
-                    let taxableGrossThisWeek = r.grossPay - r.calculatedPension;
-                    cumulativeGrossForTax += taxableGrossThisWeek;
-                    
-                    const cumulativeAllowance = weeklyAllowance * r.weekNum;
-                    const cumulativeTaxable = Math.max(0, cumulativeGrossForTax - cumulativeAllowance);
-                    const cumulativeBasicLimit = weeklyBasicLimit * r.weekNum;
-
-                    let expectedCumulativeTax = 0;
-                    if (cumulativeTaxable <= cumulativeBasicLimit) {
-                        expectedCumulativeTax = cumulativeTaxable * 0.20;
-                    } else {
-                        expectedCumulativeTax = (cumulativeBasicLimit * 0.20) + ((cumulativeTaxable - cumulativeBasicLimit) * 0.40);
-                    }
-
-                    r.calculatedTax = Math.max(0, expectedCumulativeTax - previousTotalExpectedTax);
-                    previousTotalExpectedTax = expectedCumulativeTax;
-                    r.isTaxAlert = r.calculatedTax > 0;
-
-                    // 4. 計算最終實收薪水 (Net Pay)
-                    r.netPay = r.grossPay - r.calculatedTax - r.calculatedNI - r.calculatedPension;
-                }
-                return updated;
-            };
-
-            const handleRateChange = (e) => {
-                const val = e.target.value;
-                setGlobalRate(val);
-                const updated = recalculateAllWeeks(records, val);
-                setRecords(updated);
-                localStorage.setItem('@global_rate', val);
-                localStorage.setItem('@weekly_records', JSON.stringify(updated));
-            };
-
-            const ytdGross = useMemo(() => records.reduce((sum, r) => sum + (r.grossPay || 0), 0), [records]);
-            const allowanceProgress = Math.min((ytdGross / 12570) * 100, 100);
-
-            const openEditModal = (weekNum) => {
-                const record = records.find(r => r.weekNum === weekNum);
-                setSelectedWeek(weekNum);
-                setInputHours(record.hoursWorked?.toString() || '');
-                setPensionMethod(record.pensionMethodSaved || 'standard');
-                setModalVisible(true);
-            };
-
-            const handleSave = () => {
-                const hours = parseFloat(inputHours);
-                if (isNaN(hours) && inputHours !== '') {
-                    alert('請填寫真實的工時');
-                    return;
-                }
-                const updatedHours = inputHours === '' ? null : hours;
-                const updatedRecords = records.map(r => 
-                    r.weekNum === selectedWeek 
-                    ? { ...r, hoursWorked: updatedHours, pensionMethodSaved: pensionMethod } 
-                    : r
-                );
-                const finalRecords = recalculateAllWeeks(updatedRecords, globalRate);
-                
-                setRecords(finalRecords);
-                setModalVisible(false);
-                localStorage.setItem('@weekly_records', JSON.stringify(finalRecords));
-            };
-
-            const monthsList = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
-
-            return (
-                <div className="container">
-                    <div className="dashboard">
-                        <h2 className="dashboard-title">🇬🇧 英國稅務工時記賬 (2026/27)</h2>
-                        <div className="rate-setting-row">
-                            <span className="rate-label">💰 當前設定時薪: £</span>
-                            <input type="number" className="rate-input" value={globalRate} onChange={handleRateChange} step="0.01"/>
-                        </div>
-                        <div className="progress-bar-outer">
-                            <div className="progress-bar-inner" style={{width: `${allowanceProgress}%`}} />
-                        </div>
-                        <div className="progress-subtext">累積總收入: £{ytdGross.toFixed(2)} / £12,570 ({allowanceProgress.toFixed(1)}%)</div>
-                    </div>
-
-                    <div className="month-selector">
-                        {monthsList.map(m => (
-                            <button key={m} className={`month-tab ${currentMonth === m ? 'month-tab-active' : ''}`} onClick={() => setCurrentMonth(m)}>{m}月</button>
-                        ))}
-                    </div>
-
-                    <div className="list-container">
-                        {records.filter(r => r.monthName === currentMonth).map(item => {
-                            const isEntered = item.hoursWorked !== null;
-                            return (
-                                <div key={item.weekNum} className={`card ${isEntered ? '' : 'card-empty'}`} onClick={() => openEditModal(item.weekNum)}>
-                                    <div className="card-header">
-                                        <div>
-                                            <div className="week-title">Week {item.weekNum}</div>
-                                            <div className="date-text">📅 {item.dateRange}</div>
-                                        </div>
-                                        <div className={isEntered ? 'status-verified' : 'status-pending'}>
-                                            {isEntered ? `⏱️ ${item.hoursWorked} 小時 (${item.pensionMethodSaved === 'sac' ? 'Salary Sac.' : '標準制度'})` : "⏳ 點擊填寫"}
-                                        </div>
-                                    </div>
-
-                                    {isEntered && (
-                                        <div className="card-body">
-                                            <div className="data-row">
-                                                <span className="label">自動算出的 Gross Pay:</span>
-                                                <span className="value">£{item.grossPay.toFixed(2)}</span>
-                                            </div>
-                                            <div className="divider" />
-                                            
-                                            <div className="data-row">
-                                                <div style={{display:'flex', alignItems:'center'}}>
-                                                    <span className="sub-label">• 國民保險 (NI):</span>
-                                                    {item.isNiAlert && <span className="alert-badge">⚠️已過起徵點 (8%)</span>}
-                                                </div>
-                                                <span className="calc-value">£{item.calculatedNI.toFixed(2)} <small className="percent-text">({item.niPercent.toFixed(1)}%)</small></span>
-                                            </div>
-
-                                            <div className="data-row">
-                                                <div style={{display:'flex', alignItems:'center'}}>
-                                                    <span className="sub-label">• 退休金 (Pension):</span>
-                                                    {item.isPensionAlert && <span className="alert-badge">⚠️已啟動供款 (5%)</span>}
-                                                </div>
-                                                <span className="calc-value">£{item.calculatedPension.toFixed(2)} <small className="percent-text">({item.pensionPercent.toFixed(1)}%)</small></span>
-                                            </div>
-
-                                            <div className="data-row">
-                                                <div style={{display:'flex', alignItems:'center'}}>
-                                                    <span className="sub-label">• 所得稅 (Tax):</span>
-                                                    {item.isTaxAlert ? <span className="alert-badge">⚠️開始徵稅 (20%)</span> : <span className="safe-badge">🕊️免稅區 (0%)</span>}
-                                                </div>
-                                                <span className="calc-value">£{item.calculatedTax.toFixed(2)}</span>
-                                            </div>
-                                            
-                                            <div className="divider" />
-                                            <div className="data-row">
-                                                <span className="net-label">💰 預估淨薪水 (Net Pay):</span>
-                                                <span className="net-value">£{item.netPay.toFixed(2)}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    {modalVisible && (
-                        <div className="modal-overlay">
-                            <div className="modal-content">
-                                <h3 className="modal-title">⏱️ 輸入 Week {selectedWeek} 實際工時</h3>
-                                
-                                <p className="input-label">🏢 公司退休金制：</p>
-                                <div className="pension-group">
-                                    <button className={`pension-btn ${pensionMethod === 'standard' ? 'pension-btn-active' : ''}`} onClick={() => setPensionMethod('standard')}>標準制度 (現職糧單)</button>
-                                    <button className={`pension-btn ${pensionMethod === 'sac' ? 'pension-btn-active' : ''}`} onClick={() => setPensionMethod('sac')}>薪酬犧牲 (Salary Sac.)</button>
-                                </div>
-
-                                <p className="input-label">請輸入本週實際工作時數：</p>
-                                <input type="number" className="input" value={inputHours} onChange={(e) => setInputHours(e.target.value)} placeholder="例如 40" autoFocus />
-                                <div className="modal-button-group">
-                                    <button className="btn btn-cancel" onClick={() => setModalVisible(false)}>取消</button>
-                                    <button className="btn btn-save" onClick={handleSave}>確認並推算</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+if not df_all.empty:
+    # 確保資料型態正確以便篩選
+    df_all["Year"] = df_all["Year"].astype(str)
+    df_all["Month"] = df_all["Month"].astype(str)
+    
+    # 建立篩選器排版
+    filter_col1, filter_col2 = st.columns(2)
+    
+    with filter_col1:
+        # 年份篩選
+        available_years = sorted(list(df_all["Year"].unique()), reverse=True)
+        # 加入全選功能
+        year_options = ["全部年份"] + available_years
+        selected_year = st.selectbox("📅 選擇年份", options=year_options)
+        
+    with filter_col2:
+        # 根據選定的年份來縮小月份選擇，或是直接顯示全部
+        if selected_year != "全部年份":
+            available_months = sorted(list(df_all[df_all["Year"] == selected_year]["Month"].unique()))
+        else:
+            available_months = sorted(list(df_all["Month"].unique()))
+        month_options = ["全部月份"] + available_months
+        selected_month = st.selectbox("📆 選擇月份", options=month_options)
+        
+    # --- 執行篩選邏輯 ---
+    filtered_df = df_all.copy()
+    if selected_year != "全部年份":
+        filtered_df = filtered_df[filtered_df["Year"] == selected_year]
+    if selected_month != "全部月份":
+        filtered_df = filtered_df[filtered_df["Month"] == selected_month]
+        
+    # --- 顯示篩選後的數據與統計 ---
+    if not filtered_df.empty:
+        total_gross = filtered_df["Gross Pay (£)"].sum()
+        total_net = filtered_df["Net Pay (£)"].sum()
+        total_ni = filtered_df["NI (£)"].sum()
+        total_pension_ee = filtered_df["Pension EE (£)"].sum()
+        
+        # 數據卡片
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("範圍總 Gross", f"£{total_gross:,.2f}")
+        m2.metric("範圍總 Net Pay", f"£{total_net:,.2f}")
+        m3.metric("範圍總 NI", f"£{total_ni:,.2f}")
+        m4.metric("範圍自供 Pension", f"£{total_pension_ee:,.2f}")
+        
+        # 顯示歷史表格 (按最新日期排序)
+        st.dataframe(filtered_df.sort_values(by="Date", ascending=False), use_container_width=True, index=False)
+    else:
+        st.warning("⚠️ 該篩選範圍內沒有找到任何紀錄。")
+else:
+    st.info("👋 歡迎使用！目前尚未有任何歷史紀錄，請於上方輸入你的第一筆糧單資料。")
