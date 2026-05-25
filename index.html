@@ -58,21 +58,19 @@
         .badge.alert { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }
         .badge.success { background: #f0fdf4; color: #16a34a; border: 1px solid #86efac; }
 
-        /* 完美還原：輸入彈窗 Modal */
+        /* 輸入彈窗 Modal */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; padding: 16px; z-index: 100; }
         .modal.active { display: flex; }
         .modal-content { background: var(--card); border-radius: 24px; padding: 24px; width: 100%; max-width: 360px; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); text-align: center; }
-        .modal-header-title { font-size: 16px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 12px; }
+        .modal-title-box { font-size: 16px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 12px; }
         .modal-sub-title { font-size: 13px; color: var(--text-light); text-align: left; margin-bottom: 8px; }
         
-        /* 退休金制式選擇按鈕 */
         .pension-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
         .pension-btn { padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: #f8fafc; font-size: 12px; font-weight: bold; color: var(--text-light); cursor: pointer; }
         .pension-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
         
         .input-label { text-align: left; font-size: 13px; color: var(--text-light); margin-bottom: 6px; display: block; }
         .modal-input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 16px; font-weight: bold; background: #f8fafc; color: var(--text); margin-bottom: 20px; outline: none; }
-        .modal-input:focus { border-color: var(--primary); background: #fff; }
 
         .modal-buttons { display: flex; gap: 12px; }
         .btn { flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: bold; font-size: 14px; cursor: pointer; }
@@ -96,7 +94,7 @@
         </div>
         <div class="progress-text">
             <span>累積總收入: <strong id="yearTotalGross">£0.00</strong></span>
-            <span>/ £12,570 (4.0%)</span>
+            <span>/ £12,570</span>
         </div>
         <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
     </div>
@@ -107,7 +105,7 @@
 
     <div class="modal" id="inputModal">
         <div class="modal-content">
-            <div class="modal-header-title">
+            <div class="modal-title-box">
                 ⏱️ <span id="modalTitle">輸入 Week 5 實際工時</span>
             </div>
             <div class="modal-sub-title">🏢 公司退休金制式 (大部分選標準制式即可)：</div>
@@ -128,7 +126,7 @@
     </div>
 
     <script>
-        // 英國歷史稅務年度規則 (每週基礎計算)
+        // 英國歷史稅務年度規則
         function getUkTaxRules(taxYear, month) {
             let rules = { ni_threshold: 242, ni_rate: 0.08, pension_threshold: 120 };
             if (taxYear <= 2020) rules = { ni_threshold: 183, ni_rate: 0.12, pension_threshold: 120 };
@@ -148,12 +146,12 @@
         let currentWeekKey = null;
         let currentPensionMode = 'std';
 
-        // 建立 2020-2026 年份選單
+        // 建立年份選單
         const yearSelect = document.getElementById('yearSelect');
         for (let y = 2026; y >= 2020; y--) {
             let opt = document.createElement('option');
             opt.value = y;
-            opt.textContent = `${y}/${(y+1).toString().slice(-2)} 網頁`;
+            opt.textContent = `${y}/${(y+1).toString().slice(-2)} 稅年`;
             if (y === config.selectedYear) opt.selected = true;
             yearSelect.appendChild(opt);
         }
@@ -161,6 +159,28 @@
 
         const ukMonths = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3];
         const monthNames = { 4: "Apr月", 5: "May月", 6: "Jun月", 7: "Jul月", 8: "Aug月", 9: "Sep月", 10: "Oct月", 11: "Nov月", 12: "Dec月", 1: "Jan月", 2: "Feb月", 3: "Mar月" };
+
+        // 核心：精準計算每週的真正日曆日期範圍（英國稅年從 4 月 6 日開始）
+        function getWeekDateRange(taxYear, weekNum) {
+            // 英國稅年固定由該年 4 月 6 日開始
+            let startDate = new Date(taxYear, 3, 6); 
+            
+            // 根據第幾週推算起始日同結束日
+            let weekStart = new Date(startDate.getTime() + (weekNum - 1) * 7 * 24 * 60 * 60 * 1000);
+            let weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+            
+            let startStr = `${String(weekStart.getDate()).padStart(2, '0')}/${String(weekStart.getMonth() + 1).padStart(2, '0')}`;
+            let endStr = `${String(weekEnd.getDate()).padStart(2, '0')}/${String(weekEnd.getMonth() + 1).padStart(2, '0')}`;
+            
+            return `${startStr} - ${endStr}`;
+        }
+
+        // 判斷某個週數（1-52週）實際屬於哪一個歷史月份
+        function getMonthOfWeek(taxYear, weekNum) {
+            let startDate = new Date(taxYear, 3, 6);
+            let weekStart = new Date(startDate.getTime() + (weekNum - 1) * 7 * 24 * 60 * 60 * 1000);
+            return weekStart.getMonth() + 1; // 回傳 1-12 月
+        }
 
         function initApp() {
             config.selectedYear = parseInt(document.getElementById('yearSelect').value);
@@ -207,53 +227,53 @@
             const weeksList = document.getElementById('weeksList');
             weeksList.innerHTML = '';
 
-            let startWeek = (ukMonths.indexOf(activeMonth) * 4) + 1;
-            let totalWeeks = (activeMonth === 5 || activeMonth === 8 || activeMonth === 12 || activeMonth === 3) ? 5 : 4;
+            // 全年 1 至 53 週入面，篩選出起點屬於當前選中月份嘅週數
+            for (let weekNum = 1; weekNum <= 53; weekNum++) {
+                let m = getMonthOfWeek(taxYear, weekNum);
+                
+                if (m === activeMonth) {
+                    let weekKey = `${taxYear}_${activeMonth}_${weekNum}`;
+                    let record = salaryData[weekKey] || { hours: 0, mode: 'std' };
+                    
+                    let dateRange = getWeekDateRange(taxYear, weekNum);
+                    let gross = record.hours * rate;
+                    let rules = getUkTaxRules(taxYear, activeMonth);
+                    
+                    let ni = gross > rules.ni_threshold ? (gross - rules.ni_threshold) * rules.ni_rate : 0;
+                    let pension = gross > rules.pension_threshold ? (gross - rules.pension_threshold) * 0.05 : 0;
+                    
+                    if (record.mode === 'sac') {
+                        let sacGross = Math.max(0, gross - pension);
+                        ni = sacGross > rules.ni_threshold ? (sacGross - rules.ni_threshold) * rules.ni_rate : 0;
+                    }
 
-            for (let w = 0; w < totalWeeks; w++) {
-                let weekNum = startWeek + w;
-                let weekKey = `${taxYear}_${activeMonth}_${weekNum}`;
-                let record = salaryData[weekKey] || { hours: 0, mode: 'std' };
-                
-                let gross = record.hours * rate;
-                let rules = getUkTaxRules(taxYear, activeMonth);
-                
-                // 計算稅務
-                let ni = gross > rules.ni_threshold ? (gross - rules.ni_threshold) * rules.ni_rate : 0;
-                let pension = gross > rules.pension_threshold ? (gross - rules.pension_threshold) * 0.05 : 0;
-                
-                // 如果是 Salary Sacrifice 制度，Pension 會先扣除，從而降低 NI
-                if (record.mode === 'sac') {
-                    let sacGross = Math.max(0, gross - pension);
-                    ni = sacGross > rules.ni_threshold ? (sacGross - rules.ni_threshold) * rules.ni_rate : 0;
+                    let net = gross - ni - pension;
+                    let isFilled = record.hours > 0;
+
+                    let cardHtml = `
+                        <div class="card week-card" onclick="openModal('${weekKey}', ${record.hours}, '${record.mode}')">
+                            <div class="week-header">
+                                <div>
+                                    <span class="week-title">Week ${weekNum}</span>
+                                    <div class="week-date">📅 ${dateRange}</div>
+                                </div>
+                                <div class="hours-badge ${isFilled ? 'filled' : ''}">
+                                    ⏱️ ${isFilled ? `${record.hours} 小時` : '點擊填寫'}
+                                </div>
+                            </div>
+                            ${isFilled ? `
+                            <div class="week-body">
+                                <div class="row"><span class="label">自動算出的 Gross Pay:</span><span class="val">£${gross.toFixed(2)}</span></div>
+                                <div class="row"><span class="label">・國民保險 (NI): <span class="badge alert">已過起徵點 (${(rules.ni_rate*100).toFixed(0)}%)</span></span><span class="val">£${ni.toFixed(2)}</span></div>
+                                <div class="row"><span class="label">・退休金 (Pension): <span class="badge alert">已啟動供款 (5%)</span></span><span class="val">£${pension.toFixed(2)}</span></div>
+                                <div class="row"><span class="label">・所得稅 (Tax): <span class="badge success">免稅區 (0%)</span></span><span class="val">£0.00</span></div>
+                                <div class="row net-pay-row"><span class="label" style="color:#16a34a;">💰 預估淨薪水 (Net Pay):</span><span>£${net.toFixed(2)}</span></div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    `;
+                    weeksList.insertAdjacentHTML('beforeend', cardHtml);
                 }
-
-                let net = gross - ni - pension;
-                let isFilled = record.hours > 0;
-
-                let cardHtml = `
-                    <div class="card week-card" onclick="openModal('${weekKey}', ${record.hours}, '${record.mode}')">
-                        <div class="week-header">
-                            <div>
-                                <span class="week-title">Week ${weekNum}</span>
-                                <div class="week-date">📅 ${weekNum*7-6}/5 - ${weekNum*7}/5</div>
-                            </div>
-                            <div class="hours-badge ${isFilled ? 'filled' : ''}">
-                                ⏱️ ${isFilled ? `${record.hours} 小時` : '點擊填寫'}
-                            </div>
-                        </div>
-                        ${isFilled ? `
-                        <div class="week-body">
-                            <div class="row"><span class="label">自動算出的 Gross Pay:</span><span class="val">£${gross.toFixed(2)}</span></div>
-                            <div class="row"><span class="label">・國民保險 (NI): <span class="badge alert">已過起徵點 (${(rules.ni_rate*100).toFixed(0)}%)</span></span><span class="val">£${ni.toFixed(2)}</span></div>
-                            <div class="row"><span class="label">・退休金 (Pension): <span class="badge alert">已啟動供款 (5%)</span></span><span class="val">£${pension.toFixed(2)}</span></div>
-                            <div class="row"><span class="label">・所得稅 (Tax): <span class="badge success">免稅區 (0%)</span></span><span class="val">£0.00</span></div>
-                            <div class="row net-pay-row"><span class="label" style="color:#16a34a;">💰 預估淨薪水 (Net Pay):</span><span>£${net.toFixed(2)}</span></div>
-                        </div>
-                        ` : ''}
-                    </div>
-                `;
-                weeksList.insertAdjacentHTML('beforeend', cardHtml);
             }
             lucide.createIcons();
         }
