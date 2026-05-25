@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🇬🇧 英國稅務工時記賬 (2026/27)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #F8FAFC; color: #1E293B; -webkit-tap-highlight-color: transparent; }
+        .container { background-color: #F8FAFC; min-height: 100vh; padding-bottom: 30px; }
+        .dashboard { background-color: #FFF; padding: 16px; border-bottom: 1px solid #E2E8F0; }
+        .dashboard-title { font-size: 16px; font-weight: 700; color: #1E293B; margin: 0 0 8px 0; }
+        .rate-setting-row { display: flex; align-items: center; margin: 8px 0; background-color: #EFF6FF; padding: 8px; border-radius: 8px; }
+        .rate-label { font-size: 13px; color: #1E40AF; font-weight: 600; }
+        .rate-input { background-color: #FFF; border: 1px solid #BFDBFE; border-radius: 6px; padding: 4px 8px; width: 70px; font-size: 14px; font-weight: 700; color: #1E3A8A; text-align: center; margin-left: 5px; }
+        .progress-bar-outer { height: 8px; background-color: #E2E8F0; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+        .progress-bar-inner { height: 100%; background-color: #3B82F6; transition: width 0.3s; }
+        .progress-subtext { font-size: 11px; color: #64748B; margin-top: 6px; }
+        .month-selector { background-color: #FFF; padding: 8px 16px; border-bottom: 1px solid #E2E8F0; display: flex; overflow-x: auto; white-space: nowrap; gap: 8px; }
+        .month-tab { padding: 6px 12px; border-radius: 20px; background-color: #F1F5F9; border: none; color: #64748B; font-weight: 600; font-size: 12px; cursor: pointer; }
+        .month-tab-active { background-color: #3B82F6; color: #FFF; }
+        .list-container { padding: 16px; }
+        .card { background-color: #FFF; border-radius: 12px; padding: 16px; margin-bottom: 12px; border-left: 5px solid #3B82F6; box-shadow: 0 1px 3px rgba(0,0,0,0.05); cursor: pointer; }
+        .card-empty { border-left-color: #CBD5E1; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; }
+        .week-title { font-size: 15px; font-weight: 700; color: #1E293B; }
+        .date-text { font-size: 12px; color: #64748B; margin-top: 2px; }
+        .status-verified { color: #3B82F6; font-weight: 700; font-size: 12px; }
+        .status-pending { color: #94A3B8; font-size: 12px; }
+        .card-body { margin-top: 12px; border-top: 1px solid #F1F5F9; padding-top: 8px; }
+        .data-row { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; }
+        .label { font-size: 12px; color: #64748B; }
+        .value { font-size: 13px; font-weight: 700; color: #1E293B; }
+        .sub-label { font-size: 13px; color: #475569; }
+        .calc-value { font-size: 13px; font-weight: 700; color: #334155; }
+        .percent-text { font-size: 11px; color: #64748B; font-weight: 400; }
+        .alert-badge { background-color: #FEE2E2; color: #EF4444; padding: 2px 6px; border-radius: 4px; margin-left: 6px; font-size: 10px; font-weight: 700; }
+        .safe-badge { background-color: #D1FAE5; color: #10B981; padding: 2px 6px; border-radius: 4px; margin-left: 6px; font-size: 10px; font-weight: 700; }
+        .divider { height: 1px; background-color: #F1F5F9; margin: 6px 0; }
+        .net-label { font-size: 13px; font-weight: 700; color: #0F172A; }
+        .net-value { font-size: 15px; font-weight: 800; color: #10B981; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; z-index: 999; }
+        .modal-content { background-color: #FFF; border-radius: 16px; padding: 20px; width: 85%; max-width: 340px; }
+        .modal-title { font-size: 16px; font-weight: 700; margin: 0 0 10px 0; color: #1E293B; }
+        .input-label { font-size: 12px; color: #475569; margin-bottom: 8px; }
+        .input { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px; font-size: 16px; color: #1E293B; width: 90%; margin-bottom: 15px; }
+        .modal-button-group { display: flex; justify-content: space-between; gap: 10px; }
+        .btn { flex: 1; padding: 12px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .btn-cancel { background-color: #F1F5F9; color: #64748B; }
+        .btn-save { background-color: #3B82F6; color: #FFF; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        function getWeekDateRange(weekNum) {
+            const taxStart = new Date('2026-04-06');
+            const startDays = (weekNum - 1) * 7;
+            const weekStart = new Date(taxStart.getTime() + startDays * 24 * 60 * 60 * 1000);
+            const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+            const format = (d) => `${d.getDate()}/${d.getMonth() + 1}`;
+            return `${format(weekStart)} - ${format(weekEnd)}`;
+        }
+
+        function getMonthNameForWeek(weekNum) {
+            const taxStart = new Date('2026-04-06');
+            const startDays = (weekNum - 1) * 7;
+            const weekStart = new Date(taxStart.getTime() + startDays * 24 * 60 * 60 * 1000);
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            return months[weekStart.getMonth()];
+        }
+
+        function App() {
+            const [globalRate, setGlobalRate] = useState('12.71');
+            const [currentMonth, setCurrentMonth] = useState("May");
+            const [modalVisible, setModalVisible] = useState(false);
+            const [selectedWeek, setSelectedWeek] = useState(null);
+            const [inputHours, setInputHours] = useState('');
+
+            const [records, setRecords] = useState(() => {
+                return Array.from({ length: 53 }, (_, i) => ({
+                    weekNum: i + 1,
+                    dateRange: getWeekDateRange(i + 1),
+                    monthName: getMonthNameForWeek(i + 1),
+                    hoursWorked: null,
+                    grossPay: null,
+                    calculatedTax: 0,
+                    calculatedNI: 0,
+                    calculatedPension: 0,
+                    netPay: 0,
+                    niPercent: 0,
+                    pensionPercent: 0,
+                    isNiAlert: false,
+                    isPensionAlert: false,
+                    isTaxAlert: false,
+                }));
+            });
+
+            useEffect(() => {
+                const savedRate = localStorage.getItem('@global_rate');
+                const savedRecords = localStorage.getItem('@weekly_records');
+                let currentRate = savedRate || '12.71';
+                if (savedRate) setGlobalRate(savedRate);
+                if (savedRecords) {
+                    try {
+                        const parsed = JSON.parse(savedRecords);
+                        setRecords(recalculateAllWeeks(parsed, currentRate));
+                    } catch (e) { console.error(e); }
+                }
+            }, []);
+
+            const recalculateAllWeeks = (currentRecords, currentRate) => {
+                const updated = [...currentRecords];
+                const weeklyAllowance = 12570 / 52;
+                const weeklyBasicLimit = 37700 / 52;
+                const rate = parseFloat(currentRate) || 0;
+
+                let cumulativeGrossForTax = 0;
+                let previousTotalExpectedTax = 0;
+
+                for (let i = 0; i < 53; i++) {
+                    const r = updated[i];
+                    if (r.hoursWorked === null) {
+                        r.grossPay = null; r.calculatedTax = 0; r.calculatedNI = 0; r.calculatedPension = 0; r.netPay = 0;
+                        r.niPercent = 0; r.pensionPercent = 0; r.isNiAlert = false; r.isPensionAlert = false; r.isTaxAlert = false;
+                        continue;
+                    }
+
+                    r.grossPay = r.hoursWorked * rate;
+
+                    // 1. Pension 供款計算
+                    const pensionLowerThreshold = 120;
+                    if (r.grossPay > pensionLowerThreshold) {
+                        r.calculatedPension = (r.grossPay - pensionLowerThreshold) * 0.05;
+                        r.isPensionAlert = true;
+                    } else {
+                        r.calculatedPension = 0;
+                        r.isPensionAlert = false;
+                    }
+                    r.pensionPercent = r.grossPay > 0 ? (r.calculatedPension / r.grossPay) * 100 : 0;
+
+                    // 2. NI 計算
+                    let baseForNI = r.grossPay;
+                    let expectedNI = 0;
+                    if (baseForNI > 242) {
+                        r.isNiAlert = true;
+                        if (baseForNI <= 967) {
+                            expectedNI = (baseForNI - 242) * 0.08;
+                        } else {
+                            expectedNI = ((967 - 242) * 0.08) + ((baseForNI - 967) * 0.02);
+                        }
+                    } else {
+                        r.isNiAlert = false;
+                    }
+                    r.calculatedNI = expectedNI;
+                    r.niPercent = r.grossPay > 0 ? (r.calculatedNI / r.grossPay) * 100 : 0;
+
+                    // 3. Income Tax 所得稅 (Net Pay 制度)
+                    let taxableGrossThisWeek = r.grossPay - r.calculatedPension;
+                    cumulativeGrossForTax += taxableGrossThisWeek;
+                    
+                    const cumulativeAllowance = weeklyAllowance * r.weekNum;
+                    const cumulativeTaxable = Math.max(0, cumulativeGrossForTax - cumulativeAllowance);
+                    const cumulativeBasicLimit = weeklyBasicLimit * r.weekNum;
+
+                    let expectedCumulativeTax = 0;
+                    if (cumulativeTaxable <= cumulativeBasicLimit) {
+                        expectedCumulativeTax = cumulativeTaxable * 0.20;
+                    } else {
+                        expectedCumulativeTax = (cumulativeBasicLimit * 0.20) + ((cumulativeTaxable - cumulativeBasicLimit) * 0.40);
+                    }
+
+                    r.calculatedTax = Math.max(0, expectedCumulativeTax - previousTotalExpectedTax);
+                    previousTotalExpectedTax = expectedCumulativeTax;
+                    r.isTaxAlert = r.calculatedTax > 0;
+
+                    r.netPay = r.grossPay - r.calculatedTax - r.calculatedNI - r.calculatedPension;
+                }
+                return updated;
+            };
+
+            const handleRateChange = (e) => {
+                const val = e.target.value;
+                setGlobalRate(val);
+                const updated = recalculateAllWeeks(records, val);
+                setRecords(updated);
+                localStorage.setItem('@global_rate', val);
+                localStorage.setItem('@weekly_records', JSON.stringify(updated));
+            };
+
+            const ytdGross = useMemo(() => records.reduce((sum, r) => sum + (r.grossPay || 0), 0), [records]);
+            const allowanceProgress = Math.min((ytdGross / 12570) * 100, 100);
+
+            const openEditModal = (weekNum) => {
+                const record = records.find(r => r.weekNum === weekNum);
+                setSelectedWeek(weekNum);
+                setInputHours(record.hoursWorked?.toString() || '');
+                setModalVisible(true);
+            };
+
+            const handleSave = () => {
+                const hours = parseFloat(inputHours);
+                if (isNaN(hours) && inputHours !== '') {
+                    alert('請填寫真實的工時');
+                    return;
+                }
+                const updatedHours = inputHours === '' ? null : hours;
+                const updatedRecords = records.map(r => r.weekNum === selectedWeek ? { ...r, hoursWorked: updatedHours } : r);
+                const finalRecords = recalculateAllWeeks(updatedRecords, globalRate);
+                
+                setRecords(finalRecords);
+                setModalVisible(false);
+                localStorage.setItem('@weekly_records', JSON.stringify(finalRecords));
+            };
+
+            const monthsList = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+
+            return (
+                <div className="container">
+                    <div className="dashboard">
+                        <h2 className="dashboard-title">🇬🇧 英國稅務工時記賬 (2026/27)</h2>
+                        <div className="rate-setting-row">
+                            <span className="rate-label">💰 當前設定時薪: £</span>
+                            <input type="number" className="rate-input" value={globalRate} onChange={handleRateChange} step="0.01"/>
+                        </div>
+                        <div className="progress-bar-outer">
+                            <div className="progress-bar-inner" style={{width: `${allowanceProgress}%`}} />
+                        </div>
+                        <div className="progress-subtext">累積總收入: £{ytdGross.toFixed(2)} / £12,570 ({allowanceProgress.toFixed(1)}%)</div>
+                    </div>
+
+                    <div className="month-selector">
+                        {monthsList.map(m => (
+                            <button key={m} className={`month-tab ${currentMonth === m ? 'month-tab-active' : ''}`} onClick={() => setCurrentMonth(m)}>{m}月</button>
+                        ))}
+                    </div>
+
+                    <div className="list-container">
+                        {records.filter(r => r.monthName === currentMonth).map(item => {
+                            const isEntered = item.hoursWorked !== null;
+                            return (
+                                <div key={item.weekNum} className={`card ${isEntered ? '' : 'card-empty'}`} onClick={() => openEditModal(item.weekNum)}>
+                                    <div className="card-header">
+                                        <div>
+                                            <div className="week-title">Week {item.weekNum}</div>
+                                            <div className="date-text">📅 {item.dateRange}</div>
+                                        </div>
+                                        <div className={isEntered ? 'status-verified' : 'status-pending'}>
+                                            {isEntered ? `⏱️ ${item.hoursWorked} 小時` : "⏳ 點擊填寫"}
+                                        </div>
+                                    </div>
+
+                                    {isEntered && (
+                                        <div className="card-body">
+                                            <div className="data-row">
+                                                <span className="label">自動算出的 Gross Pay:</span>
+                                                <span className="value">£{item.grossPay.toFixed(2)}</span>
+                                            </div>
+                                            <div className="divider" />
+                                            
+                                            <div className="data-row">
+                                                <div style={{display:'flex', alignItems:'center'}}>
+                                                    <span className="sub-label">• 國民保險 (NI):</span>
+                                                    {item.isNiAlert && <span className="alert-badge">⚠️已過起徵點 (8%)</span>}
+                                                </div>
+                                                <span className="calc-value">£{item.calculatedNI.toFixed(2)} <small className="percent-text">({item.niPercent.toFixed(1)}%)</small></span>
+                                            </div>
+
+                                            <div className="data-row">
+                                                <div style={{display:'flex', alignItems:'center'}}>
+                                                    <span className="sub-label">• 退休金 (Pension):</span>
+                                                    {item.isPensionAlert && <span className="alert-badge">⚠️已啟動供款 (5%)</span>}
+                                                </div>
+                                                <span className="calc-value">£{item.calculatedPension.toFixed(2)} <small className="percent-text">({item.pensionPercent.toFixed(1)}%)</small></span>
+                                            </div>
+
+                                            <div className="data-row">
+                                                <div style={{display:'flex', alignItems:'center'}}>
+                                                    <span className="sub-label">• 所得稅 (Tax):</span>
+                                                    {item.isTaxAlert ? <span className="alert-badge">⚠️開始徵稅 (20%)</span> : <span className="safe-badge">🕊️免稅區 (0%)</span>}
+                                                </div>
+                                                <span className="calc-value">£{item.calculatedTax.toFixed(2)}</span>
+                                            </div>
+                                            
+                                            <div className="divider" />
+                                            <div className="data-row">
+                                                <span className="net-label">💰 預估淨薪水 (Net Pay):</span>
+                                                <span className="net-value">£{item.netPay.toFixed(2)}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {modalVisible && (
+                        <div className="modal-overlay">
+                            <div className="modal-content">
+                                <h3 className="modal-title">⏱️ 輸入 Week {selectedWeek} 實際工時</h3>
+                                <p className="input-label">請輸入本週實際工作時數（留空確認可刪除紀錄）：</p>
+                                <input type="number" className="input" value={inputHours} onChange={(e) => setInputHours(e.target.value)} placeholder="例如 40" autoFocus />
+                                <div className="modal-button-group">
+                                    <button className="btn btn-cancel" onClick={() => setModalVisible(false)}>取消</button>
+                                    <button className="btn btn-save" onClick={handleSave}>確認並推算</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
