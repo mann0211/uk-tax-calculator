@@ -3,109 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>英國工資歷史紀錄 App</title>
+    <title>英國稅務工時記賬</title>
     <script src="https://cdn.jsdelivr.net/npm/lucide@0.344.0/dist/umd/lucide.min.js"></script>
     <style>
         :root {
-            --primary: #1e40af;
+            --primary: #2563eb;
             --primary-light: #eff6ff;
             --text: #1e293b;
             --text-light: #64748b;
             --bg: #f8fafc;
             --card: #ffffff;
             --border: #e2e8f0;
-            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background-color: var(--bg); color: var(--text); padding: 16px; max-width: 600px; margin: 0 auto; padding-bottom: 60px; }
+        body { background-color: #f1f5f9; color: var(--text); padding: 16px; max-width: 600px; margin: 0 auto; padding-bottom: 40px; }
         
-        .header { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: bold; margin-bottom: 16px; color: var(--primary); }
-        .card { background: var(--card); border-radius: 16px; padding: 16px; box-shadow: var(--shadow); border: 1px solid var(--border); margin-bottom: 16px; }
+        .header { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: bold; margin-bottom: 16px; }
+        .card { background: var(--card); border-radius: 16px; padding: 16px; box-shadow: var(--shadow); margin-bottom: 16px; border: 1px solid var(--border); }
         
-        /* 篩選與時薪設定區 */
-        .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-        .input-group { display: flex; flex-direction: column; gap: 4px; }
-        .input-group label { font-size: 12px; color: var(--text-light); font-weight: 500; }
-        .input-group select, .input-group input { padding: 10px; border-radius: 8px; border: 1px solid var(--border); font-size: 14px; color: var(--text); font-weight: bold; background: var(--bg); }
-        
+        /* 頂部設定 */
+        .config-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .rate-box { background: var(--primary-light); color: var(--primary); padding: 8px 16px; border-radius: 12px; font-weight: bold; display: flex; align-items: center; gap: 4px; border: 1px solid #bfdbfe; }
+        .rate-box input { border: none; background: transparent; width: 60px; font-size: 16px; font-weight: bold; color: var(--primary); text-align: center; outline: none; }
+        .year-select { padding: 8px; border-radius: 8px; border: 1px solid var(--border); font-weight: bold; color: var(--text); background: var(--bg); }
+
         /* 進度條 */
-        .progress-container { font-size: 12px; color: var(--text-light); margin-top: 8px; }
+        .progress-text { font-size: 12px; color: var(--text-light); margin-top: 10px; display: flex; justify-content: space-between; }
         .progress-bar { background: var(--border); height: 6px; border-radius: 3px; margin-top: 4px; overflow: hidden; }
         .progress-fill { background: var(--primary); height: 100%; width: 0%; transition: width 0.3s; }
 
         /* 月份切換橫條 */
-        .month-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 16px; -webkit-overflow-scrolling: touch; }
+        .month-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 16px; -webkit-overflow-scrolling: touch; }
         .month-tabs::-webkit-scrollbar { display: none; }
-        .month-tab { padding: 6px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 20px; font-size: 13px; color: var(--text-light); cursor: pointer; white-space: nowrap; font-weight: 500; }
-        .month-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
-
-        /* 統計資訊卡 */
-        .stats-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; background: var(--primary-light); border: 1px solid #dbeafe; }
-        .stat-box { display: flex; flex-direction: column; }
-        .stat-box .label { font-size: 12px; color: var(--primary); font-weight: 500; }
-        .stat-box .value { font-size: 18px; font-weight: bold; color: var(--primary); margin-top: 2px; }
+        .month-tab { padding: 6px 16px; background: #e2e8f0; border-radius: 20px; font-size: 14px; color: var(--text-light); cursor: pointer; white-space: nowrap; font-weight: 500; border: none; }
+        .month-tab.active { background: var(--primary); color: white; }
 
         /* 週項目列表 */
-        .week-card { border-left: 4px solid var(--primary); margin-bottom: 12px; transition: all 0.2s; }
-        .week-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .week-card { border-left: 4px solid var(--primary); margin-bottom: 12px; cursor: pointer; }
+        .week-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
         .week-title { font-weight: bold; font-size: 16px; }
-        .week-date { font-size: 12px; color: var(--text-light); display: flex; align-items: center; gap: 4px; }
-        .hours-badge { background: var(--primary-light); color: var(--primary); padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: bold; display: flex; align-items: center; gap: 4px; }
+        .week-date { font-size: 12px; color: var(--text-light); }
+        .hours-badge { color: var(--text-light); font-size: 14px; display: flex; align-items: center; gap: 4px; }
+        .hours-badge.filled { color: var(--primary); font-weight: bold; }
         
-        .week-body { display: flex; flex-direction: column; gap: 8px; font-size: 13px; border-top: 1px dashed var(--border); padding-top: 8px; }
+        .week-body { display: flex; flex-direction: column; gap: 8px; font-size: 14px; border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 6px; }
         .row { display: flex; justify-content: space-between; align-items: center; }
-        .row .label { color: var(--text-light); display: flex; align-items: center; gap: 4px; }
-        .row .val { font-weight: 600; }
-        .net-pay-row { font-size: 15px; font-weight: bold; color: #16a34a; border-top: 1px solid var(--border); padding-top: 6px; margin-top: 4px; }
+        .row .label { color: var(--text-light); }
+        .row .val { font-weight: bold; }
+        .net-pay-row { font-size: 16px; font-weight: bold; color: #16a34a; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }
         
-        .badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        .badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-left: 4px; }
         .badge.alert { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }
         .badge.success { background: #f0fdf4; color: #16a34a; border: 1px solid #86efac; }
 
-        /* 輸入彈窗 Modal */
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; padding: 16px; z-index: 100; }
+        /* 完美還原：輸入彈窗 Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); align-items: center; justify-content: center; padding: 16px; z-index: 100; }
         .modal.active { display: flex; }
-        .modal-content { background: var(--card); border-radius: 16px; padding: 20px; width: 100%; max-width: 400px; box-shadow: var(--shadow); }
-        .modal-title { font-size: 16px; font-weight: bold; margin-bottom: 16px; color: var(--primary); }
-        .modal-buttons { display: flex; gap: 12px; margin-top: 20px; }
-        .btn { flex: 1; padding: 12px; border-radius: 8px; border: none; font-weight: bold; font-size: 14px; cursor: pointer; text-align: center; }
-        .btn.cancel { background: var(--border); color: var(--text); }
+        .modal-content { background: var(--card); border-radius: 24px; padding: 24px; width: 100%; max-width: 360px; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); text-align: center; }
+        .modal-header-title { font-size: 16px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 12px; }
+        .modal-sub-title { font-size: 13px; color: var(--text-light); text-align: left; margin-bottom: 8px; }
+        
+        /* 退休金制式選擇按鈕 */
+        .pension-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+        .pension-btn { padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: #f8fafc; font-size: 12px; font-weight: bold; color: var(--text-light); cursor: pointer; }
+        .pension-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        
+        .input-label { text-align: left; font-size: 13px; color: var(--text-light); margin-bottom: 6px; display: block; }
+        .modal-input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 16px; font-weight: bold; background: #f8fafc; color: var(--text); margin-bottom: 20px; outline: none; }
+        .modal-input:focus { border-color: var(--primary); background: #fff; }
+
+        .modal-buttons { display: flex; gap: 12px; }
+        .btn { flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: bold; font-size: 14px; cursor: pointer; }
+        .btn.cancel { background: #f1f5f9; color: var(--text-light); }
         .btn.save { background: var(--primary); color: white; }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <i data-lucide="gantt-chart-square"></i> 🇬🇧 英國工資歷史紀錄與估算
+        🇬🇧 英國稅務工時記賬
     </div>
 
     <div class="card">
-        <div class="config-grid">
-            <div class="input-group">
-                <label>📅 選擇年份 (Tax Year)</label>
-                <select id="yearSelect" onchange="initApp()"></select>
-            </div>
-            <div class="input-group">
-                <label>💰 設定時薪 (£)</label>
+        <div class="config-bar">
+            <select id="yearSelect" class="year-select" onchange="initApp()"></select>
+            <div class="rate-box">
+                <span>💰 當前設定時薪: £</span>
                 <input type="number" id="hourlyRate" value="12.71" step="0.01" onchange="saveConfig(); updateUI();">
             </div>
         </div>
-        <div class="progress-container">
-            年累積收入: <span id="yearTotalGross">£0.00</span> / £12,570 (Personal Allowance)
-            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-text">
+            <span>累積總收入: <strong id="yearTotalGross">£0.00</strong></span>
+            <span>/ £12,570 (4.0%)</span>
         </div>
-    </div>
-
-    <div class="card stats-summary">
-        <div class="stat-box">
-            <span class="label">篩選範圍總 Gross</span>
-            <span class="value" id="filterGross">£0.00</span>
-        </div>
-        <div class="stat-box">
-            <span class="label">篩選範圍總 Net Pay</span>
-            <span class="value" id="filterNet" style="color: #16a34a;">£0.00</span>
-        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
     </div>
 
     <div class="month-tabs" id="monthTabs"></div>
@@ -114,79 +107,70 @@
 
     <div class="modal" id="inputModal">
         <div class="modal-content">
-            <div class="modal-title" id="modalTitle">輸入工時</div>
-            <div class="input-group" style="margin-bottom: 12px;">
-                <label>本週工作時數 (Hours)</label>
-                <input type="number" id="modalHours" value="0" step="0.5" min="0">
+            <div class="modal-header-title">
+                ⏱️ <span id="modalTitle">輸入 Week 5 實際工時</span>
             </div>
-            <div class="input-group">
-                <label>手動微調 PAYE Tax (£，若無填0)</label>
-                <input type="number" id="modalTax" value="0" step="0.01" min="0">
+            <div class="modal-sub-title">🏢 公司退休金制式 (大部分選標準制式即可)：</div>
+            
+            <div class="pension-options">
+                <button id="pensionStd" class="pension-btn active" onclick="setPensionMode('std')">標準制度 (現職糧單)</button>
+                <button id="pensionSac" class="pension-btn" onclick="setPensionMode('sac')">薪酬犧牲 (Salary Sac.)</button>
             </div>
+            
+            <label class="input-label">請輸入本週你實際工作了多少個**小時 (Hours)**：</label>
+            <input type="number" id="modalHours" class="modal-input" inputmode="decimal" placeholder="例如 40">
+            
             <div class="modal-buttons">
                 <button class="btn cancel" onclick="closeModal()">取消</button>
-                <button class="btn save" onclick="saveHours()">儲存紀錄</button>
+                <button class="btn save" onclick="saveHours()">確認並推算</button>
             </div>
         </div>
     </div>
 
     <script>
-        // 1. 英國歷史稅務年度規則大數據 (每週精準計算)
+        // 英國歷史稅務年度規則 (每週基礎計算)
         function getUkTaxRules(taxYear, month) {
             let rules = { ni_threshold: 242, ni_rate: 0.08, pension_threshold: 120 };
-            
-            if (taxYear <= 2020) {
-                rules = { ni_threshold: 183, ni_rate: 0.12, pension_threshold: 120 };
-            } else if (taxYear === 2021) {
-                rules = { ni_threshold: 184, ni_rate: 0.12, pension_threshold: 120 };
-            } else if (taxYear === 2022) {
-                // 2022年 7月起門檻提升至 242，但前期有 13.25% 醫療附加稅
-                if (month >= 7) { rules = { ni_threshold: 242, ni_rate: 0.12, pension_threshold: 120 }; }
-                else { rules = { ni_threshold: 190, ni_rate: 0.1325, pension_threshold: 120 }; }
+            if (taxYear <= 2020) rules = { ni_threshold: 183, ni_rate: 0.12, pension_threshold: 120 };
+            else if (taxYear === 2021) rules = { ni_threshold: 184, ni_rate: 0.12, pension_threshold: 120 };
+            else if (taxYear === 2022) {
+                if (month >= 7) rules = { ni_threshold: 242, ni_rate: 0.12, pension_threshold: 120 };
+                else rules = { ni_threshold: 190, ni_rate: 0.1325, pension_threshold: 120 };
             } else if (taxYear === 2023) {
-                // 2024年1月起 NI 降至 10%
-                if (month >= 10 || month <= 3) { rules = { ni_threshold: 242, ni_rate: 0.10, pension_threshold: 120 }; } // 1月起屬稅年後半段
-                else { rules = { ni_threshold: 242, ni_rate: 0.12, pension_threshold: 120 }; }
-            } else if (taxYear >= 2024) {
-                rules = { ni_threshold: 242, ni_rate: 0.08, pension_threshold: 120 };
+                if (month >= 10 || month <= 3) rules = { ni_threshold: 242, ni_rate: 0.10, pension_threshold: 120 };
+                else rules = { ni_threshold: 242, ni_rate: 0.12, pension_threshold: 120 };
             }
             return rules;
         }
 
-        // 2. 初始化本地永久數據庫
-        let salaryData = JSON.parse(localStorage.getItem('uk_salary_db')) || {};
-        let config = JSON.parse(localStorage.getItem('uk_salary_config')) || { hourlyRate: 12.71, selectedYear: 2026, selectedMonth: 4 };
+        let salaryData = JSON.parse(localStorage.getItem('uk_pay_db')) || {};
+        let config = JSON.parse(localStorage.getItem('uk_pay_config')) || { hourlyRate: 12.71, selectedYear: 2026, selectedMonth: 5 };
+        let currentWeekKey = null;
+        let currentPensionMode = 'std';
 
-        // 建立年份選單 (2020 至今)
+        // 建立 2020-2026 年份選單
         const yearSelect = document.getElementById('yearSelect');
         for (let y = 2026; y >= 2020; y--) {
             let opt = document.createElement('option');
             opt.value = y;
-            opt.textContent = `${y}/${(y+1).toString().slice(-2)} 稅年`;
+            opt.textContent = `${y}/${(y+1).toString().slice(-2)} 網頁`;
             if (y === config.selectedYear) opt.selected = true;
             yearSelect.appendChild(opt);
         }
         document.getElementById('hourlyRate').value = config.hourlyRate;
 
-        // 3. 核心邏輯：生成英國稅務月份與週數 (英國稅年從 4 月開始)
         const ukMonths = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3];
         const monthNames = { 4: "Apr月", 5: "May月", 6: "Jun月", 7: "Jul月", 8: "Aug月", 9: "Sep月", 10: "Oct月", 11: "Nov月", 12: "Dec月", 1: "Jan月", 2: "Feb月", 3: "Mar月" };
-
-        let currentActiveWeekKey = null;
 
         function initApp() {
             config.selectedYear = parseInt(document.getElementById('yearSelect').value);
             saveConfig();
 
-            // 生成月份橫條 HTML
             const monthTabs = document.getElementById('monthTabs');
             monthTabs.innerHTML = '';
-            
-            // 預設選擇歷史第一個有資料的月份，或是當前稅年的 4月
-            if (!ukMonths.includes(config.selectedMonth)) config.selectedMonth = 4;
 
             ukMonths.forEach(m => {
-                let btn = document.createElement('div');
+                let btn = document.createElement('button');
                 btn.className = `month-tab ${m === config.selectedMonth ? 'active' : ''}`;
                 btn.textContent = monthNames[m];
                 btn.onclick = () => {
@@ -198,107 +182,88 @@
                 };
                 monthTabs.appendChild(btn);
             });
-
             updateUI();
         }
 
         function saveConfig() {
             config.hourlyRate = parseFloat(document.getElementById('hourlyRate').value) || 0;
-            localStorage.setItem('uk_salary_config', JSON.stringify(config));
+            localStorage.setItem('uk_pay_config', JSON.stringify(config));
         }
 
-        // 4. 渲染界面
         function updateUI() {
             const taxYear = config.selectedYear;
             const activeMonth = config.selectedMonth;
             const rate = config.hourlyRate;
 
-            // 計算年累積總 Gross
             let yearGrossSum = 0;
             Object.keys(salaryData).forEach(key => {
                 if (key.startsWith(`${taxYear}_`)) {
-                    let hours = salaryData[key].hours || 0;
-                    yearGrossSum += hours * rate;
+                    yearGrossSum += (salaryData[key].hours || 0) * rate;
                 }
             });
             document.getElementById('yearTotalGross').textContent = `£${yearGrossSum.toFixed(2)}`;
-            let progressPercent = Math.min(100, (yearGrossSum / 12570) * 100);
-            document.getElementById('progressFill').style.width = `${progressPercent}%`;
+            document.getElementById('progressFill').style.width = `${Math.min(100, (yearGrossSum / 12570) * 100)}%`;
 
-            // 計算特定月份內的 4/5 週
             const weeksList = document.getElementById('weeksList');
             weeksList.innerHTML = '';
 
-            // 簡易模擬每個月固定有 4 或 5 週
             let startWeek = (ukMonths.indexOf(activeMonth) * 4) + 1;
-            let totalWeeksInMonth = (activeMonth === 5 || activeMonth === 8 || activeMonth === 12 || activeMonth === 3) ? 5 : 4;
-            
-            let filterGrossSum = 0;
-            let filterNetSum = 0;
+            let totalWeeks = (activeMonth === 5 || activeMonth === 8 || activeMonth === 12 || activeMonth === 3) ? 5 : 4;
 
-            for (let w = 0; w < totalWeeksInMonth; w++) {
+            for (let w = 0; w < totalWeeks; w++) {
                 let weekNum = startWeek + w;
                 let weekKey = `${taxYear}_${activeMonth}_${weekNum}`;
-                let record = salaryData[weekKey] || { hours: 0, tax: 0 };
+                let record = salaryData[weekKey] || { hours: 0, mode: 'std' };
                 
-                // 核心英國工資歷史計算法
                 let gross = record.hours * rate;
                 let rules = getUkTaxRules(taxYear, activeMonth);
                 
+                // 計算稅務
                 let ni = gross > rules.ni_threshold ? (gross - rules.ni_threshold) * rules.ni_rate : 0;
                 let pension = gross > rules.pension_threshold ? (gross - rules.pension_threshold) * 0.05 : 0;
-                let net = gross - record.tax - ni - pension;
+                
+                // 如果是 Salary Sacrifice 制度，Pension 會先扣除，從而降低 NI
+                if (record.mode === 'sac') {
+                    let sacGross = Math.max(0, gross - pension);
+                    ni = sacGross > rules.ni_threshold ? (sacGross - rules.ni_threshold) * rules.ni_rate : 0;
+                }
 
-                filterGrossSum += gross;
-                filterNetSum += net;
-
-                // 動態生成美觀卡片
+                let net = gross - ni - pension;
                 let isFilled = record.hours > 0;
+
                 let cardHtml = `
-                    <div class="card week-card" onclick="openModal('${weekKey}', ${record.hours}, ${record.tax})">
+                    <div class="card week-card" onclick="openModal('${weekKey}', ${record.hours}, '${record.mode}')">
                         <div class="week-header">
                             <div>
                                 <span class="week-title">Week ${weekNum}</span>
-                                <div class="week-date"><i data-lucide="calendar" style="width:12px;height:12px;"></i> ${monthNames[activeMonth]} 內</div>
+                                <div class="week-date">📅 ${weekNum*7-6}/5 - ${weekNum*7}/5</div>
                             </div>
-                            <div class="hours-badge">
-                                <i data-lucide="clock" style="width:12px;height:12px;"></i> ${record.hours} 小時
+                            <div class="hours-badge ${isFilled ? 'filled' : ''}">
+                                ⏱️ ${isFilled ? `${record.hours} 小時` : '點擊填寫'}
                             </div>
                         </div>
                         ${isFilled ? `
                         <div class="week-body">
                             <div class="row"><span class="label">自動算出的 Gross Pay:</span><span class="val">£${gross.toFixed(2)}</span></div>
-                            <div class="row">
-                                <span class="label">・國民保險 (NI): ${ni > 0 ? `<span class="badge alert">已過起徵點 (${(rules.ni_rate*100).toFixed(1)}%)</span>` : `<span class="badge success">免稅區</span>`}</span>
-                                <span class="val">£${ni.toFixed(2)}</span>
-                            </div>
-                            <div class="row">
-                                <span class="label">・退休金 (Pension): ${pension > 0 ? `<span class="badge alert">已啟動供款 (5%)</span>` : `<span class="badge success">免供區</span>`}</span>
-                                <span class="val">£${pension.toFixed(2)}</span>
-                            </div>
-                            <div class="row"><span class="label">・所得稅 (Tax):</span><span class="val">£${record.tax.toFixed(2)}</span></div>
-                            <div class="row net-pay-row"><span class="label" style="color:#16a34a; font-weight:bold;">💰 預估淨薪水 (Net Pay):</span><span>£${net.toFixed(2)}</span></div>
+                            <div class="row"><span class="label">・國民保險 (NI): <span class="badge alert">已過起徵點 (${(rules.ni_rate*100).toFixed(0)}%)</span></span><span class="val">£${ni.toFixed(2)}</span></div>
+                            <div class="row"><span class="label">・退休金 (Pension): <span class="badge alert">已啟動供款 (5%)</span></span><span class="val">£${pension.toFixed(2)}</span></div>
+                            <div class="row"><span class="label">・所得稅 (Tax): <span class="badge success">免稅區 (0%)</span></span><span class="val">£0.00</span></div>
+                            <div class="row net-pay-row"><span class="label" style="color:#16a34a;">💰 預估淨薪水 (Net Pay):</span><span>£${net.toFixed(2)}</span></div>
                         </div>
-                        ` : `
-                        <div style="text-align:center; font-size:13px; color:var(--text-light); padding-top:4px;">⏳ 點擊填寫本週工時紀錄</div>
-                        `}
+                        ` : ''}
                     </div>
                 `;
                 weeksList.insertAdjacentHTML('beforeend', cardHtml);
             }
-
-            document.getElementById('filterGross').textContent = `£${filterGrossSum.toFixed(2)}`;
-            document.getElementById('filterNet').textContent = `£${filterNetSum.toFixed(2)}`;
             lucide.createIcons();
         }
 
-        // 5. 彈窗控制功能
-        function openModal(key, hours, tax) {
-            currentActiveWeekKey = key;
-            let weekDisplay = key.split('_')[2];
-            document.getElementById('modalTitle').textContent = `修改 Week ${weekDisplay} 紀錄`;
-            document.getElementById('modalHours').value = hours;
-            document.getElementById('modalTax').value = tax;
+        function openModal(key, hours, mode) {
+            currentWeekKey = key;
+            currentPensionMode = mode || 'std';
+            document.getElementById('modalTitle').textContent = `輸入 Week ${key.split('_')[2]} 實際工時`;
+            document.getElementById('modalHours').value = hours > 0 ? hours : '';
+            setPensionMode(currentPensionMode);
             document.getElementById('inputModal').classList.add('active');
         }
 
@@ -306,19 +271,22 @@
             document.getElementById('inputModal').classList.remove('active');
         }
 
+        function setPensionMode(mode) {
+            currentPensionMode = mode;
+            document.getElementById('pensionStd').classList.toggle('active', mode === 'std');
+            document.getElementById('pensionSac').classList.toggle('active', mode === 'sac');
+        }
+
         function saveHours() {
             let h = parseFloat(document.getElementById('modalHours').value) || 0;
-            let t = parseFloat(document.getElementById('modalTax').value) || 0;
-            
             if (h >= 0) {
-                salaryData[currentActiveWeekKey] = { hours: h, tax: t };
-                localStorage.setItem('uk_salary_db', JSON.stringify(salaryData));
+                salaryData[currentWeekKey] = { hours: h, mode: currentPensionMode };
+                localStorage.setItem('uk_pay_db', JSON.stringify(salaryData));
                 closeModal();
                 updateUI();
             }
         }
 
-        // 啟動 App
         initApp();
     </script>
 </body>
