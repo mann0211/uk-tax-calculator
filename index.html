@@ -41,11 +41,16 @@
         .divider { height: 1px; background-color: #F1F5F9; margin: 6px 0; }
         .net-label { font-size: 13px; font-weight: 700; color: #0F172A; }
         .net-value { font-size: 15px; font-weight: 800; color: #10B981; }
+        
+        /* 彈窗與模式切換按鈕專用樣式 */
         .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; z-index: 999; }
         .modal-content { background-color: #FFF; border-radius: 16px; padding: 20px; width: 85%; max-width: 340px; }
         .modal-title { font-size: 16px; font-weight: 700; margin: 0 0 10px 0; color: #1E293B; }
-        .input-label { font-size: 12px; color: #475569; margin-bottom: 8px; }
-        .input { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px; font-size: 16px; color: #1E293B; width: 90%; margin-bottom: 15px; }
+        .input-label { font-size: 12px; color: #475569; margin-bottom: 8px; margin-top: 10px; }
+        .pension-group { display: flex; gap: 8px; margin-bottom: 15px; }
+        .pension-btn { flex: 1; padding: 10px 6px; font-size: 12px; font-weight: 600; border: 1px solid #E2E8F0; background-color: #FFF; border-radius: 8px; cursor: pointer; color: #475569; text-align: center; }
+        .pension-btn-active { background-color: #3B82F6; color: #FFF; border-color: #3B82F6; }
+        .input { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px; font-size: 16px; color: #1E293B; width: 92%; margin-bottom: 15px; box-sizing: border-box; }
         .modal-button-group { display: flex; justify-content: space-between; gap: 10px; }
         .btn { flex: 1; padding: 12px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; }
         .btn-cancel { background-color: #F1F5F9; color: #64748B; }
@@ -81,6 +86,7 @@
             const [modalVisible, setModalVisible] = useState(false);
             const [selectedWeek, setSelectedWeek] = useState(null);
             const [inputHours, setInputHours] = useState('');
+            const [pensionMethod, setPensionMethod] = useState('standard'); // standard 或 sac
 
             const [records, setRecords] = useState(() => {
                 return Array.from({ length: 53 }, (_, i) => ({
@@ -98,6 +104,7 @@
                     isNiAlert: false,
                     isPensionAlert: false,
                     isTaxAlert: false,
+                    pensionMethodSaved: 'standard' // 每週單獨儲存機制
                 }));
             });
 
@@ -114,6 +121,7 @@
                 }
             }, []);
 
+            // 核心計稅與推算邏輯 (完全移植 Expo 雙制度演算法)
             const recalculateAllWeeks = (currentRecords, currentRate) => {
                 const updated = [...currentRecords];
                 const weeklyAllowance = 12570 / 52;
@@ -132,8 +140,9 @@
                     }
 
                     r.grossPay = r.hoursWorked * rate;
+                    const method = r.pensionMethodSaved || 'standard';
 
-                    // 1. Pension 供款計算
+                    // 1. Pension 退休金計算 (過基本門檻 £120 扣 5%)
                     const pensionLowerThreshold = 120;
                     if (r.grossPay > pensionLowerThreshold) {
                         r.calculatedPension = (r.grossPay - pensionLowerThreshold) * 0.05;
@@ -144,8 +153,13 @@
                     }
                     r.pensionPercent = r.grossPay > 0 ? (r.calculatedPension / r.grossPay) * 100 : 0;
 
-                    // 2. NI 計算
+                    // 2. National Insurance (NI) 國民保險計算
+                    // ⚠️ 如果係 Salary Sacrifice (薪酬犧牲)，Pension 供款會先扣減 NI 基數，達致慳 NI 效果！
                     let baseForNI = r.grossPay;
+                    if (method === 'sac') {
+                        baseForNI = Math.max(0, r.grossPay - r.calculatedPension);
+                    }
+                    
                     let expectedNI = 0;
                     if (baseForNI > 242) {
                         r.isNiAlert = true;
@@ -160,7 +174,8 @@
                     r.calculatedNI = expectedNI;
                     r.niPercent = r.grossPay > 0 ? (r.calculatedNI / r.grossPay) * 100 : 0;
 
-                    // 3. Income Tax 所得稅 (Net Pay 制度)
+                    // 3. Income Tax 所得稅累計制計算
+                    // 標準制度 (Net Pay) 與 薪酬犧牲 (Salary Sac.) 都會將 Pension 喺計稅前扣除
                     let taxableGrossThisWeek = r.grossPay - r.calculatedPension;
                     cumulativeGrossForTax += taxableGrossThisWeek;
                     
@@ -179,6 +194,7 @@
                     previousTotalExpectedTax = expectedCumulativeTax;
                     r.isTaxAlert = r.calculatedTax > 0;
 
+                    // 4. 計算最終實收薪水 (Net Pay)
                     r.netPay = r.grossPay - r.calculatedTax - r.calculatedNI - r.calculatedPension;
                 }
                 return updated;
@@ -200,6 +216,7 @@
                 const record = records.find(r => r.weekNum === weekNum);
                 setSelectedWeek(weekNum);
                 setInputHours(record.hoursWorked?.toString() || '');
+                setPensionMethod(record.pensionMethodSaved || 'standard');
                 setModalVisible(true);
             };
 
@@ -210,7 +227,11 @@
                     return;
                 }
                 const updatedHours = inputHours === '' ? null : hours;
-                const updatedRecords = records.map(r => r.weekNum === selectedWeek ? { ...r, hoursWorked: updatedHours } : r);
+                const updatedRecords = records.map(r => 
+                    r.weekNum === selectedWeek 
+                    ? { ...r, hoursWorked: updatedHours, pensionMethodSaved: pensionMethod } 
+                    : r
+                );
                 const finalRecords = recalculateAllWeeks(updatedRecords, globalRate);
                 
                 setRecords(finalRecords);
@@ -251,7 +272,7 @@
                                             <div className="date-text">📅 {item.dateRange}</div>
                                         </div>
                                         <div className={isEntered ? 'status-verified' : 'status-pending'}>
-                                            {isEntered ? `⏱️ ${item.hoursWorked} 小時` : "⏳ 點擊填寫"}
+                                            {isEntered ? `⏱️ ${item.hoursWorked} 小時 (${item.pensionMethodSaved === 'sac' ? 'Salary Sac.' : '標準制度'})` : "⏳ 點擊填寫"}
                                         </div>
                                     </div>
 
@@ -303,7 +324,14 @@
                         <div className="modal-overlay">
                             <div className="modal-content">
                                 <h3 className="modal-title">⏱️ 輸入 Week {selectedWeek} 實際工時</h3>
-                                <p className="input-label">請輸入本週實際工作時數（留空確認可刪除紀錄）：</p>
+                                
+                                <p className="input-label">🏢 公司退休金制：</p>
+                                <div className="pension-group">
+                                    <button className={`pension-btn ${pensionMethod === 'standard' ? 'pension-btn-active' : ''}`} onClick={() => setPensionMethod('standard')}>標準制度 (現職糧單)</button>
+                                    <button className={`pension-btn ${pensionMethod === 'sac' ? 'pension-btn-active' : ''}`} onClick={() => setPensionMethod('sac')}>薪酬犧牲 (Salary Sac.)</button>
+                                </div>
+
+                                <p className="input-label">請輸入本週實際工作時數：</p>
                                 <input type="number" className="input" value={inputHours} onChange={(e) => setInputHours(e.target.value)} placeholder="例如 40" autoFocus />
                                 <div className="modal-button-group">
                                     <button className="btn btn-cancel" onClick={() => setModalVisible(false)}>取消</button>
